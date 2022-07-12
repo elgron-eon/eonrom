@@ -1,0 +1,757 @@
+#
+# rom.asm
+#
+# eon ROM
+# (c) JCGV, junio del 2022
+#
+
+#
+# CONFIG
+#
+KEYBUF_SIZE	.EQU	16
+
+# constants
+BS		.EQU	$08
+DEL		.EQU	$7f
+TAB		.EQU	$09
+LF		.EQU	$0a
+CR		.EQU	$0d
+ESC		.EQU	$1b
+MLINBYTES	.EQU	8
+
+# IRQs
+IRQ_RTC 	.EQU	$01
+IRQ_CON 	.EQU	$04
+
+# special registers
+REG_IRQ_MASK	.EQU	$04
+REG_IRQ_PC	.EQU	$05
+REG_IRQ_SCRATCH .EQU	$06
+REG_IRQ_SAVE	.EQU	$07
+REG_EXC_CODE	.EQU	$0c
+REG_EXC_PC	.EQU	$0d
+REG_EXC_SCRATCH .EQU	$0e
+REG_EXC_SAVE	.EQU	$0f
+
+# I/O devices
+CON_CTRL	.EQU	$00
+CON_DATA	.EQU	CON_CTRL + 1
+RTC_CTRL	.EQU	$02
+RTC_DATA	.EQU	RTC_CTRL + 1
+RTC_WRITE	.EQU	RTC_CTRL + 2
+DEBUG_IO	.EQU	$FF
+
+#
+# memory map
+#
+ROM_START	.EQU	$00000
+RAM_START	.EQU	$01000
+IRQ_STACK	.EQU	$02000
+EXC_STACK	.EQU	IRQ_STACK - 32
+SYS_STACK	.EQU	EXC_STACK - 128
+TOP_RAM 	.EQU	$20000
+
+#
+# RAM area
+#
+		.ORG	RAM_START
+SYSVARS_START
+MMON_VALUE	.SPACE	4
+
+# serial buffer
+KEYBUF		.SPACE	KEYBUF_SIZE + 2
+
+# rtc date buffer
+DATE_IO 	.SPACE	8
+DATE_READY	.SPACE	1
+
+# align end marker
+		.SPACE	 8 - ($$ % 8)
+SYSVARS_END
+
+#
+# BIOS
+#
+		.ORG	ROM_START
+
+# RESET system, power on entry point
+RESET		LI	R0, 0
+		SET	REG_IRQ_MASK, R0
+		LI	R0, SYS_STACK
+		MV	SP, R0
+		LI	R0, IRQ_HANDLER
+		SET	REG_IRQ_PC, R0
+		LI	R0, EXC_HANDLER
+		SET	REG_EXC_PC, R0
+		BRA	MONITOR
+
+# IRQ handler
+IRQ_HANDLER	SET	REG_IRQ_SCRATCH, R0
+		LEA	R0, IRQ_STACK
+		ST4	[R0 - 1], R1
+		ST4	[R0 - 2], R2
+		ST4	[R0 - 3], R3
+		ST4	[R0 - 4], R4
+		ST4	[R0 - 5], R5
+		ISTAT	R1
+		AND	R2, R1, IRQ_CON
+		BZ	R2, .NOCON
+
+		# key pressed
+		LI	R4, KEYBUF
+		LD1	R2, [R4]	# head offset
+		LD1	R3, [R4 + 1]	# tail offset
+		ADD	R3, 1
+		AND	R3, KEYBUF_SIZE - 1
+		BEQ	R3, R2, .NOCON	# buffer is full
+
+		LD1	R2, [R4 + 1]	# get tail again
+		ST1	[R4 + 1], R3	# store new tail
+		ADD	R2, R4
+		LI	R4, CON_DATA
+		IN	R4, R4		# r4 = char
+		ST1	[R2 + 2], R4	# store char
+
+.NOCON		AND	R2, R1, IRQ_RTC
+		BZ	R2, .DONE
+		LEA	R2, DATE_IO
+		LEA	R3, RTC_DATA
+		LEA	R4, 8
+.RTCDUMP	IN	R5, R3
+		ST1	[R2], R5
+		ADD	R2, 1
+		SUB	R4, 1
+		BNZ	R4, .RTCDUMP
+		LI	R4, 1
+		ST1	[R2], R4
+
+.DONE		LD4	R1, [R0 - 1]
+		LD4	R2, [R0 - 2]
+		LD4	R3, [R0 - 3]
+		LD4	R4, [R0 - 4]
+		LD4	R5, [R0 - 5]
+		GET	R0, REG_IRQ_SCRATCH
+		IRET
+
+# CONOUT: output R0 in serial line
+CONOUT		LI	R2, CON_CTRL
+		IN	R1, R2
+		BZ	R1, CONOUT     ; ready wait
+		LI	R2, CON_DATA
+		OUT	R0, R2
+		RET
+
+# CONSTR: output zero terminated string in R0
+CONSTR		MV	R3, R0
+		MV	R4, R14
+.AGAIN		LD1	R0, [R3]
+		BZ	R0, .DONE
+		JAL	CONOUT
+		ADD	R3, 1
+		BRA	.AGAIN
+.DONE		MV	R14, R4
+		RET
+
+# CONREAD: wait for console char
+CONREADWAIT	WAIT
+CONREAD 	LI	R4, KEYBUF
+		LD1	R1, [R4]
+		LD1	R0, [R4 + 1]
+		BEQ	R1, R0, CONREADWAIT
+		ADD	R0, R1, R4
+		LD1	R0, [R0 + 2]	# get character
+		ADD	R1, 1
+		AND	R1, KEYBUF_SIZE - 1
+		ST1	[R4], R1	# store new head
+		RET
+
+# CONREADECHO: read console with echo
+CONREADECHO	ST4	[SP - 1], R14
+		JAL	CONREAD
+		JAL	CONOUT
+		LD4	R14, [SP - 1]
+		RET
+
+#
+# utils
+#
+
+# DECNUM2: output decimal number < 100
+DECNUM2 	ST4	[SP - 1], R14
+		ST4	[SP - 2], R8
+		LI	R1, 10
+		LI	R2, 0
+		BLT	R0, R1, .DONE
+.AGAIN		SUB	R0, R1
+		ADD	R2, 1
+		BLE	R1, R0, .AGAIN
+
+.DONE		# R2 = first digit
+		# R0 = second digit
+		MV	R8, R0
+		ADD	R0, R2, '0'
+		JAL	CONOUT
+		ADD	R0, R8, '0'
+		JAL	CONOUT
+		LD4	R14, [SP - 1]
+		LD4	R8,  [SP - 2]
+		RET
+
+# DECNUM4: output decimal number < 10000
+DECNUM4 	ENTER	-2
+		ST4	[SP + 0], R14
+		ST4	[SP + 1], R8
+		LI	R1, 100
+		LI	R2, 0
+		BLT	R0, R1, .DONE
+.AGAIN		SUB	R0, R1
+		ADD	R2, 1
+		BLE	R1, R0, .AGAIN
+.DONE		MV	R8, R0
+		MV	R0, R2
+		JAL	DECNUM2
+		MV	R0, R8
+		JAL	DECNUM2
+		LD4	R14, [SP + 0]
+		LD4	R8,  [SP + 1]
+		ENTER	2
+		RET
+
+# MUL10: multiply R0 * 10
+MUL10		SHL	R0, R0, 1
+		MV	R1, R0
+		SHL	R0, R0, 2
+		ADD	R0, R1
+		RET
+
+# UPDATE BYTE (decimal < 100)
+# R0 = POINTER, R1 = DECIMAL DIGIT, R2 = LOW FLAG
+UPDATE_BYTE:	LD1	R3, [R0]
+		LI	R4, 10
+		LI	R5, 0
+		BLT	R3, R4, .READY
+.AGAIN		SUB	R3, R4
+		ADD	R5, 1
+		BLE	R4, R3, .AGAIN
+		# R5 = HI, R3 = LO
+.READY		BNZ	R2, .UPDLOW
+		MV	R5, R1
+		BRA	.DONE
+.UPDLOW 	MV	R3, R1
+.DONE		SHL	R5, R5, 1
+		MV	R1, R5
+		SHL	R1, R1, 2
+		ADD	R1, R5
+		ADD	R1, R3
+		ST1	[R0], R1
+		RET
+
+# HEXBYTE: dump byte in r0 in hex
+HEXBYTE 	ENTER	-2
+		ST4	[SP], R14
+		ST4	[SP + 1], R8
+		MV	R8, R0
+		SHR	R0, 4
+		AND	R0, 15
+		LD1	R0, [R0 + HTAB]
+		JAL	CONOUT
+		MV	R0, R8
+		AND	R0, 15
+		LD1	R0, [R0 + HTAB]
+		JAL	CONOUT
+		LD4	R14, [SP]
+		LD4	R8,  [SP + 1]
+		ENTER	2
+		RET
+
+# HEXFULL: dump full word r0 in hex
+HEXFULL 	ENTER	-2
+		ST4	[SP], R14
+		ST4	[SP + 1], R8
+		MV	R8, R0
+		SHR	R0, R8, 24
+		JAL	HEXBYTE
+		SHR	R0, R8, 16
+		JAL	HEXBYTE
+		SHR	R0, R8, 8
+		JAL	HEXBYTE
+		MV	R0, R8
+		JAL	HEXBYTE
+		LD4	R14, [SP]
+		LD4	R8,  [SP + 1]
+		ENTER	2
+		RET
+
+# CRC32: R0 = ptr, R1 = bytes
+CRC32		LI	R3, -1
+		LI	R6, $EDB88320
+		BZ	R1, .DONE
+.AGAIN		LD1	R2, [R0]
+		ADD	R0, 1
+		SUB	R1, 1
+		XOR	R3, R2
+		LI	R4, 8
+.LOOP		AND	R5, R3, 1
+		SUB	R5, SP, R5
+		AND	R5, R6
+		SHR	R3, 1
+		XOR	R3, R5
+		SUB	R4, 1
+		BNZ	R4, .LOOP
+		BNZ	R1, .AGAIN
+.DONE		XOR	R0, R3, -1
+		RET
+
+#
+# exception handler
+#
+EXC_HANDLER	# save frame
+		SET	REG_EXC_SCRATCH, R0
+		LI	R0, EXC_STACK - 16 * 4
+		ST4	[R0 +  1], R1
+		ST4	[R0 +  2], R2
+		ST4	[R0 +  3], R3
+		ST4	[R0 +  4], R4
+		ST4	[R0 +  5], R5
+		ST4	[R0 +  6], R6
+		ST4	[R0 +  7], R7
+		ST4	[R0 +  8], R8
+		ST4	[R0 +  9], R9
+		ST4	[R0 + 10], R10
+		ST4	[R0 + 11], R11
+		ST4	[R0 + 12], R12
+		ST4	[R0 + 13], R13
+		ST4	[R0 + 14], R14
+		ST4	[R0 + 15], SP
+		MV	SP, R0
+		GET	R0, REG_EXC_SCRATCH
+		ST4	[SP], R0
+
+		LI	R0, EXC_HEADER
+		JAL	CONSTR
+		GET	R0, REG_EXC_CODE
+		JAL	HEXFULL
+		LI	R0, EXC_MIDDLE
+		JAL	CONSTR
+		GET	R0, REG_EXC_SAVE
+		JAL	HEXFULL
+		LI	R0, EXC_FOOTER
+		JAL	CONSTR
+
+		# dump registers
+		LI	R8, 0
+		MV	R9, SP
+		LI	R10, EXC_STACK
+.LOOP		# dump register
+		LI	R0, ' '
+		AND	R1, R8, 3
+		BNZ	R1, .NOLF
+		LI	R0, LF
+.NOLF		JAL	CONOUT
+		LI	R0, 'R'
+		JAL	CONOUT
+		MV	R0, R8
+		JAL	HEXBYTE
+		LI	R0, '='
+		JAL	CONOUT
+		LD4	R0, [R9]
+		JAL	HEXFULL
+
+		# next
+		ADD	R8, 1
+		ADD	R9, 4
+		BLT	R9, R10, .LOOP
+
+		# notify debugger
+		LI	R0, DEBUG_IO
+		OUT	R0, R0
+
+		# wait forever
+.HALT		WAIT
+		BRA	.HALT
+
+#
+# monitor
+#
+MONITOR 	# zero sysvars area
+		LI	R0, SYSVARS_START
+		LI	R1, SYSVARS_END
+		LI	R2, 0
+.ZEROVARS	ST4	[R0], R2
+		ADD	R0, 4
+		BLT	R0, R1, .ZEROVARS
+
+		# init serial console
+		;LD	 A, :RTS_LOW
+		;OUT	 (:IODEV_CONSOLE), A
+
+		# enable irqs
+		LI	R0, -1
+		SET	REG_IRQ_MASK, R0
+
+		# say hello
+		LI	R0, HELLO
+		JAL	CONSTR
+
+		# output menu
+MAINMENU:	LI	R0, MENU
+		JAL	CONSTR
+
+		# read option
+		JAL	CONREADECHO
+
+		# check option
+		SUB	R1, R0, '0'
+		BZ	R1, RESET
+		SUB	R1, R0, '9'
+		BZ	R1, .ILLEGAL
+		SUB	R1, R0, '1'
+		BZ	R1, DATE
+		SUB	R1, R0, '2'
+		BZ	R1, MEMMON
+		SUB	R1, R0, '4'
+		BZ	R1, BENCH
+		SUB	R1, R0, ESC
+		BNZ	R1, MAINMENU
+
+		# ouput space to disable esc
+		LI	R0, ESCOFF
+		JAL	CONSTR
+		BRA	MAINMENU
+
+.ILLEGAL	ILLEGAL
+
+#
+# BENCH
+#
+BENCH		LI	R0, BENCH_HEADER
+		JAL	CONSTR
+		LI	R8, 100
+.LOOP		LI	R0, 0
+		LI	R1, 64
+		JAL	CRC32
+		SUB	R8, 1
+		BNZ	R8, .LOOP
+		JAL	HEXFULL
+		BRA	MAINMENU
+
+#
+# GET/SET DATE
+#
+DATE		# request date
+		LI	R0, 0
+		ST1	[R0 + DATE_READY], R0
+
+		# request date
+.POLL		LI	R0, RTC_CTRL
+		IN	R0, R0
+		BZ	R0, .POLL
+		LI	R1, RTC_DATA
+		LI	R0, 0
+		OUT	R0, R1
+
+		# wait response
+.AGAIN		LI	R0, 0
+		LD1	R0, [R0 + DATE_READY]
+		BNZ	R0, .READY
+		WAIT
+		BRA	.AGAIN
+
+		# output date
+.READY		LI	R9, 0		# cursor
+		LI	R0, LF
+		JAL	CONOUT
+.REFRESH	LI	R0, DATE_HEADER
+		JAL	CONSTR
+		LI	R8, DATE_IO
+		LD2	R0, [R8]	# year
+		JAL	DECNUM4
+		LD1	R0, [R8 + 2]	# month
+		JAL	DECNUM2
+		LD1	R0, [R8 + 3]	# day
+		JAL	DECNUM2
+		LI	R0, ' '
+		JAL	CONOUT
+		LD1	R0, [R8 + 4]	# day of week
+		ADD	R0, '0'
+		JAL	CONOUT
+		LI	R0, ' '
+		JAL	CONOUT
+		LD1	R0, [R8 + 5]	# hour
+		JAL	DECNUM2
+		LD1	R0, [R8 + 6]	# minute
+		JAL	DECNUM2
+		LD1	R0, [R8 + 7]	# second
+		JAL	DECNUM2
+		LI	R0, DATE_FOOTER
+		JAL	CONSTR
+
+		# set cursor pos
+		LD1	R0, [R9 + DATE_COLS]
+		JAL	DECNUM2
+		LI	R0, 'G'
+		JAL CONOUT
+
+		# readcmd
+.READCMD	JAL	CONREAD
+		SUB	R1, R0, 'X'
+		BZ	R1, MAINMENU
+		SUB	R1, R0, 'x'
+		BZ	R1, MAINMENU
+		SUB	R1, R0, ESC
+		BZ	R1, MAINMENU
+		SUB	R1, R0, TAB
+		BZ	R1, .NEXT
+		SUB	R1, R0, ' '
+		BZ	R1, .NEXT
+		SUB	R1, R0, LF
+		BZ	R1, .CHANGE
+		SUB	R1, R0, CR
+		BZ	R1, .CHANGE
+		SUB	R1, R0, '9'
+		BLTI	SP, R1, .READCMD
+		SUB	R1, R0, '0'
+		BLTI	R1, SP, .READCMD
+
+		# update state with new digit (R1)
+		LI	R2, DATE_IO
+		LI	R0, 8
+		BNE	R9, R0, .NODOW
+		ST1	[R2 + 4], R1
+		BRA	.NEXT
+.NODOW		BLT	R9, R0, .NOTIME
+		SUB	R0, R9, 9
+		SHR	R0, 1
+		ADD	R0, R2
+		ADD	R0, 5
+		AND	R2, R9, 1
+		XOR	R2, 1
+		JAL	UPDATE_BYTE
+		BRA	.NEXT
+.NOTIME 	LI	R0, 4
+		BLT	R9, R0, .YEAR
+		SUB	R0, R9, R0
+		SHR	R0, 1
+		ADD	R0, R2, R0
+		ADD	R0, 2
+		AND	R2, R9, 1
+		JAL	UPDATE_BYTE
+		BRA	.NEXT
+.YEAR		LD2	R0, [R2]
+		LI	R7, 1000
+		LI	R3, 0
+		BLT	R0, R7, .P1000
+.A1000		SUB	R0, R7
+		ADD	R3, 1
+		BLE	R7, R0, .A1000
+.P1000		LI	R7, 100
+		LI	R4, 0
+		BLT	R0, R7, .P100
+.A100		SUB	R0, R7
+		ADD	R4, 1
+		BLE	R7, R0, .A100
+.P100		LI	R7, 10
+		LI	R5, 0
+		BLT	R0, R7, .UPDY
+.A10		SUB	R0, R7
+		ADD	R5, 1
+		BLE	R7, R0, .A10
+.UPDY		MV	R6, R9
+		BNZ	R6, .NOUPD0
+		MV	R3, R1
+		BRA	.YBUILD
+.NOUPD0 	SUB	R6, 1
+		BNZ	R6, .NOUPD1
+		MV	R4, R1
+		BRA	.YBUILD
+.NOUPD1 	SUB	R6, 1
+		BNZ	R6, .NOUPD2
+		MV	R5, R1
+		BRA	.YBUILD
+.NOUPD2 	MV	R0, R1
+.YBUILD 	MV	R6, R0
+		MV	R0, R3
+		JAL	MUL10
+		ADD	R0, R4
+		JAL	MUL10
+		ADD	R0, R5
+		JAL	MUL10
+		ADD	R0, R6
+		ST2	[R2], R0
+		BRA	.NEXT
+
+.NEXT		# inc cursor
+		ADD	R9, 1
+		LI	R0, 15
+		BLT	R9, R0, .REFRESH
+		LI	R9, 0
+		BRA	.REFRESH
+
+.CHANGE 	LI	R0, RTC_CTRL
+		IN	R0, R0
+		BZ	R0, .CHANGE
+		LI	R1, RTC_DATA
+		LI	R0, 1	# write cmd
+		OUT	R0, R1
+		LI	R1, RTC_WRITE
+		LI	R2, DATE_IO
+		LI	R3, 8
+.WRITE		LD1	R0, [R2]
+		ADD	R2, 1
+		SUB	R3, 1
+		OUT	R0, R1
+		BNZ	R3, .WRITE
+		LI	R0, DATE_WRITTEN
+		JAL	CONSTR
+		BRA	MAINMENU
+
+#
+# Memory monitor
+#
+MEMMON		LI	R13, 0	# base addr
+		LI	R12, 4	# mem lines
+		ST4	[R13 + MMON_VALUE], R13
+.REFRESH	LI	R0, MMON_HEADER
+		JAL	CONSTR
+		MV	R8, R13
+		MV	R9, R12
+.NEXTLINE	# show addr
+		MV	R0, R8
+		JAL	HEXFULL
+
+		# hex dump
+		LI	R10, MLINBYTES
+		MV	R11, R8
+.HEXDUMP	LI	R0, ' '
+		JAL	CONOUT
+		LD1	R0, [R11]
+		JAL	HEXBYTE
+		ADD	R11, 1
+		SUB	R10, 1
+		BNZ	R10, .HEXDUMP
+
+		# ascii dump
+		LI	R0, ' '
+		JAL	CONOUT
+		LI	R10, MLINBYTES
+.ASCIIDUMP	LD1	R0, [R8]
+		LI	R1, ' '
+		BLT	R0, R1, .MKPOINT
+		LI	R1, 128
+		BLT	R0, R1, .READY
+.MKPOINT	LI	R0, '.'
+.READY		JAL	CONOUT
+		ADD	R8, 1
+		SUB	R10, 1
+		BNZ	R10, .ASCIIDUMP
+
+		# end of line
+		LI	R0, LF
+		JAL	CONOUT
+		SUB	R9, 1
+		BNZ	R9, .NEXTLINE
+
+		# dump value
+.PARTIAL	LI	R0, CR
+		JAL	CONOUT
+		LI	R0, MMON_VALUE
+		LD4	R0, [R0]
+		JAL	HEXFULL
+
+		# readcmd
+.READCMD	JAL	CONREAD
+		SUB	R1, R0, 'X'
+		BZ	R1, MAINMENU
+		SUB	R1, R0, 'x'
+		BZ	R1, MAINMENU
+		SUB	R1, R0, ESC
+		BZ	R1, MAINMENU
+		SUB	R1, R0, 'I'
+		BZ	R1, .INCLINE
+		SUB	R1, R0, 'i'
+		BZ	R1, .INCLINE
+		SUB	R1, R0, 'z'
+		BZ	R1, .ZEROVAL
+		SUB	R1, R0, 'Z'
+		BZ	R1, .ZEROVAL
+		SUB	R1, R0, LF
+		BZ	R1, .GOTO
+		SUB	R1, R0, CR
+		BZ	R1, .GOTO
+		SUB	R1, R0, BS
+		BZ	R1, .BACK
+		SUB	R1, R0, DEL
+		BZ	R1, .BACK
+		SUB	R1, R0, 'P'
+		BZ	R1, .POKE
+		SUB	R1, R0, 'p'
+		BZ	R1, .POKE
+		SUB	R1, R0, 'K'
+		BZ	R1, .POKE
+		SUB	R1, R0, 'k'
+		BZ	R1, .POKE
+		SUB	R1, R0, TAB
+		BZ	R1, .NEXT
+
+		# hex digit ?
+		LI	R1, '0'
+		BLT	R0, R1, .READCMD
+		LI	R2, '9'
+		BLT	R2, R0, .NODEC
+		SUB	R0, R1
+		BRA	.ADDVAL
+.NODEC		OR	R0, $20 # lowercase
+		LI	R1, 'a'
+		BLT	R0, R1, .READCMD
+		LI	R2, 'f'
+		BLT	R2, R0, .READCMD
+		SUB	R0, R1
+		ADD	R0, 10
+.ADDVAL 	LI	R1, MMON_VALUE
+		LD4	R2, [R1]
+		SHL	R2, 4
+		OR	R2, R0
+		ST4	[R1], R2
+		BRA	.PARTIAL
+
+.INCLINE	ADD	R12, 1
+		BRA	.REFRESH
+.ZEROVAL	LI	R1, MMON_VALUE
+		LI	R0, 0
+		ST4	[R1], R0
+		BRA	.PARTIAL
+.GOTO		LI	R1, MMON_VALUE
+		LD4	R13, [R1]
+		BRA	.REFRESH
+.BACK		LI	R1, MMON_VALUE
+		LD4	R0, [R1]
+		SHR	R0, 4
+		ST4	[R1], R0
+		BRA	.PARTIAL
+.POKE		LI	R1, MMON_VALUE
+		LD4	R0, [R1]
+		ST1	[R13], R0
+		BRA	.REFRESH
+.NEXT		ADD	R13, 1
+		BRA	.REFRESH
+
+#
+# string area
+#
+HELLO		.BYTE	LF, "EON KERNEL 0.0.0", 0
+MENU		.BYTE	LF
+		.BYTE	"1. GET/SET DATE   4. BENCHMARK", LF
+		.BYTE	"2. MEMORY MONITOR 9. ILLEGAL", LF
+		.BYTE	"3. DISK MONITOR   0. RESET", LF
+		.BYTE	"OPTION? ", 0
+DATE_HEADER	.BYTE	CR, "  ", 0
+DATE_FOOTER	.BYTE	" (TAB/SPACE=NEXT, ESC/X=EXIT ENTER=UPDATE)", ESC, "[", 0
+DATE_COLS	.BYTE	3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 17, 18, 19
+DATE_WRITTEN	.BYTE	LF, "DATE WRITTEN !", 0
+HTAB		.BYTE	"0123456789ABCDEF"
+ESCOFF		.BYTE	"[K", 0
+MMON_HEADER	.BYTE	LF, " (ESC/X=EXIT ENTER=GOTO TAB=NEXT Z=ZERO I=INC LINES P/K=POKE)", LF, 0
+EXC_HEADER	.BYTE	LF, "EXCEPTION ", 0
+EXC_MIDDLE	.BYTE	" AT ", 0
+EXC_FOOTER	.BYTE	" WITH REGS:", 0
+BENCH_HEADER	.BYTE	LF, "CRC32 FIRST 64 ROM BYTES 100 TIMES: ", 0
