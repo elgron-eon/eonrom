@@ -1,0 +1,870 @@
+#
+# jforth builtin dictionary
+#
+		.ALIGN	4
+
+F_DROP		.LONG	0	; link to previous
+		.BYTE	4	; flags + namelen
+		.BYTE	"DROP"
+		.ALIGN	4
+B_DROP		.LONG	C_DROP
+
+F_ILLEGAL	.LONG	F_DROP
+		.BYTE	7
+		.BYTE	"ILLEGAL"
+		.ALIGN	4
+		.LONG	C_ILLEGAL
+
+F_SWAP		.LONG	F_ILLEGAL
+		.BYTE	4	; flags + namelen
+		.BYTE	"SWAP"
+		.ALIGN	4
+B_SWAP		.LONG	C_SWAP
+
+F_DUP		.LONG	F_SWAP	; link to previous
+		.BYTE	3	; flags + namelen
+		.BYTE	"DUP"
+		.ALIGN	4
+B_DUP		.LONG	C_DUP
+
+F_OVER		.LONG	F_DUP	; link to previous
+		.BYTE	4	; flags + namelen
+		.BYTE	"OVER"
+		.ALIGN	4
+		.LONG	C_OVER
+
+F_ROT		.LONG	F_OVER	; link to previous
+		.BYTE	3	; flags + namelen
+		.BYTE	"ROT"
+		.ALIGN	4
+B_ROT		.LONG	C_ROT
+
+F_NROT		.LONG	F_ROT	; link to previous
+		.BYTE	4	; flags + namelen
+		.BYTE	"-ROT"
+		.ALIGN	4
+		.LONG	C_NROT
+
+F_QDUP		.LONG	F_NROT	; link to previous
+		.BYTE	4	; flags + namelen
+		.BYTE	"?DUP"
+		.ALIGN	4
+B_QDUP		.LONG	C_QDUP
+
+F_INCR		.LONG	F_QDUP	; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"1+"
+		.ALIGN	4
+B_INCR		.LONG	C_INCR
+
+F_DECR		.LONG	F_INCR	; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"1-"
+		.ALIGN	4
+B_DECR		.LONG	C_DECR
+
+F_INCR4 	.LONG	F_DECR	; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"4+"
+		.ALIGN	4
+B_INCR4 	.LONG	C_INCR4
+
+F_DECR4 	.LONG	F_INCR4 ; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"4-"
+		.ALIGN	4
+		.LONG	C_DECR4
+
+F_ADD		.LONG	F_DECR4 ; link to previous
+		.BYTE	1	; flags + namelen
+		.BYTE	"+"
+		.ALIGN	4
+B_ADD		.LONG	C_ADD
+
+F_SUB		.LONG	F_ADD	; link to previous
+		.BYTE	1	; flags + namelen
+		.BYTE	"-"
+		.ALIGN	4
+B_SUB		.LONG	C_SUB
+
+F_CRC32 	.LONG	F_SUB
+		.BYTE	5
+		.BYTE	"CRC32"
+		.ALIGN	4
+		.LONG	C_CRC32
+
+F_MUL		.LONG	F_CRC32
+		.BYTE	1
+		.BYTE	"*"
+		.ALIGN	4
+B_MUL		.LONG	C_MUL
+
+F_EQU		.LONG	F_MUL	; link to previous
+		.BYTE	1	; flags + namelen
+		.BYTE	"="
+		.ALIGN	4
+		.LONG	C_EQU
+
+F_NEQU		.LONG	F_EQU	; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"<>"
+		.ALIGN	4
+		.LONG	C_NEQU
+
+F_LT		.LONG	F_NEQU	; link to previous
+		.BYTE	1	; flags + namelen
+		.BYTE	"<"
+		.ALIGN	4
+B_LT		.LONG	C_LT
+
+F_GT		.LONG	F_LT	; link to previous
+		.BYTE	1	; flags + namelen
+		.BYTE	">"
+		.ALIGN	4
+		.LONG	C_GT
+
+F_LE		.LONG	F_GT	; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"<="
+		.ALIGN	4
+		.LONG	C_LE
+
+F_GE		.LONG	F_LE	; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	">="
+		.ALIGN	4
+		.LONG	C_GE
+
+F_ZEQU		.LONG	F_GE	; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"0="
+		.ALIGN	4
+B_ZEQU		.LONG	C_ZEQU
+
+F_ZNEQU 	.LONG	F_ZEQU	; link to previous
+		.BYTE	3	; flags + namelen
+		.BYTE	"0<>"
+		.ALIGN	4
+		.LONG	C_ZNEQU
+
+F_ZLT		.LONG	F_ZNEQU ; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"0<"
+		.ALIGN	4
+B_ZLT		.LONG	C_ZLT
+
+F_ZGT		.LONG	F_ZLT	; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"0>"
+		.ALIGN	4
+B_ZGT		.LONG	C_ZGT
+
+F_ZLE		.LONG	F_ZGT	; link to previous
+		.BYTE	3	; flags + namelen
+		.BYTE	"0<="
+		.ALIGN	4
+		.LONG	C_ZLE
+
+F_ZGE		.LONG	F_ZLE	; link to previous
+		.BYTE	3	; flags + namelen
+		.BYTE	"0>="
+		.ALIGN	4
+		.LONG	C_ZGE
+
+F_AND		.LONG	F_ZGE	; link to previous
+		.BYTE	3	; flags + namelen
+		.BYTE	"AND"
+		.ALIGN	4
+		.LONG	C_AND
+
+F_OR		.LONG	F_AND	; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"OR"
+		.ALIGN	4
+		.LONG	C_OR
+
+F_XOR		.LONG	F_OR	; link to previous
+		.BYTE	3	; flags + namelen
+		.BYTE	"XOR"
+		.ALIGN	4
+		.LONG	C_XOR
+
+F_EXIT		.LONG	F_XOR	; link to previous
+		.BYTE	4	; flags + namelen
+		.BYTE	"EXIT"
+		.ALIGN	4
+B_EXIT		.LONG	C_EXIT
+
+F_LIT		.LONG	F_EXIT	; link to previous
+		.BYTE	3	; flags + namelen
+		.BYTE	"LIT"
+		.ALIGN	4
+B_LIT		.LONG	C_LIT
+
+F_STORE 	.LONG	F_LIT	; link to previous
+		.BYTE	1	; flags + namelen
+		.BYTE	"!"
+		.ALIGN	4
+B_STORE 	.LONG	C_STORE
+
+F_FETCH 	.LONG	F_STORE ; link to previous
+		.BYTE	1	; flags + namelen
+		.BYTE	"@"
+		.ALIGN	4
+B_FETCH 	.LONG	C_FETCH
+
+F_ADDSTORE	.LONG	F_FETCH ; link to previous
+		.BYTE	2	; flags + namelen
+		.BYTE	"+!"
+		.ALIGN	4
+B_ADDSTORE	.LONG	C_ADDSTORE
+
+F_SUBSTORE	.LONG	F_ADDSTORE
+		.BYTE	2	; flags + namelen
+		.BYTE	"-!"
+		.ALIGN	4
+		.LONG	C_SUBSTORE
+
+F_STOREBYTE	.LONG	F_SUBSTORE
+		.BYTE	2	; flags + namelen
+		.BYTE	"C!"
+		.ALIGN	4
+		.LONG	C_STOREBYTE
+
+F_FETCHBYTE	.LONG	F_STOREBYTE
+		.BYTE	2	; flags + namelen
+		.BYTE	"C@"
+		.ALIGN	4
+		.LONG	C_FETCHBYTE
+
+F_STATE 	.LONG	F_FETCHBYTE
+		.BYTE	5	; flags + namelen
+		.BYTE	"STATE"
+		.ALIGN	4
+		.LONG	C_STATE
+
+F_HERE		.LONG	F_STATE
+		.BYTE	4	; flags + namelen
+		.BYTE	"HERE"
+		.ALIGN	4
+B_HERE		.LONG	C_HERE
+
+F_LATEST	.LONG	F_HERE
+		.BYTE	6	; flags + namelen
+		.BYTE	"LATEST"
+		.ALIGN	4
+B_LATEST	.LONG	C_LATEST
+
+F_S0		.LONG	F_LATEST
+		.BYTE	2	; flags + namelen
+		.BYTE	"S0"
+		.ALIGN	4
+B_S0		.LONG	C_S0
+
+F_BASE		.LONG	F_S0
+		.BYTE	4	; flags + namelen
+		.BYTE	"BASE"
+		.ALIGN	4
+B_BASE		.LONG	C_BASE
+
+F_VERSION	.LONG	F_BASE
+		.BYTE	7	; flags + namelen
+		.BYTE	"VERSION"
+		.ALIGN	4
+		.LONG	C_VERSION
+
+F_R0		.LONG	F_VERSION
+		.BYTE	2	; flags + namelen
+		.BYTE	"R0"
+		.ALIGN	4
+B_R0		.LONG	C_R0
+
+F_DOCOL 	.LONG	F_R0
+		.BYTE	5	; flags + namelen
+		.BYTE	"DOCOL"
+		.ALIGN	4
+		.LONG	C_DOCOL
+
+F_F_IMMED	.LONG	F_DOCOL
+		.BYTE	7	; flags + namelen
+		.BYTE	"F_IMMED"
+		.ALIGN	4
+		.LONG	C_F_IMMED
+
+F_F_HIDDEN	.LONG	F_F_IMMED
+		.BYTE	8	; flags + namelen
+		.BYTE	"F_HIDDEN"
+		.ALIGN	4
+		.LONG	C_F_HIDDEN
+
+F_F_LENMASK	.LONG	F_F_HIDDEN
+		.BYTE	9	; flags + namelen
+		.BYTE	"F_LENMASK"
+		.ALIGN	4
+		.LONG	C_F_LENMASK
+
+F_TOR		.LONG	F_F_LENMASK
+		.BYTE	2	; flags + namelen
+		.BYTE	">R"
+		.ALIGN	4
+		.LONG	C_TOR
+
+F_FROMR 	.LONG	F_TOR
+		.BYTE	2	; flags + namelen
+		.BYTE	"R>"
+		.ALIGN	4
+		.LONG	C_FROMR
+
+F_RSPFETCH	.LONG	F_FROMR
+		.BYTE	4	; flags + namelen
+		.BYTE	"RSP@"
+		.ALIGN	4
+		.LONG	C_RSPFETCH
+
+F_RSPSTORE	.LONG	F_RSPFETCH
+		.BYTE	4	; flags + namelen
+		.BYTE	"RSP!"
+		.ALIGN	4
+B_RSPSTORE	.LONG	C_RSPSTORE
+
+F_RDROP 	.LONG	F_RSPSTORE
+		.BYTE	5	; flags + namelen
+		.BYTE	"RDROP"
+		.ALIGN	4
+		.LONG	C_RDROP
+
+F_DSPFETCH	.LONG	F_RDROP
+		.BYTE	4	; flags + namelen
+		.BYTE	"DSP@"
+		.ALIGN	4
+B_DSPFETCH	.LONG	C_DSPFETCH
+
+F_DSPSTORE	.LONG	F_DSPFETCH
+		.BYTE	4	; flags + namelen
+		.BYTE	"DSP!"
+		.ALIGN	4
+		.LONG	C_DSPSTORE
+
+F_KEY		.LONG	F_DSPSTORE
+		.BYTE	3	; flags + namelen
+		.BYTE	"KEY"
+		.ALIGN	4
+		.LONG	C_KEY
+
+F_EMIT		.LONG	F_KEY
+		.BYTE	4	; flags + namelen
+		.BYTE	"EMIT"
+		.ALIGN	4
+B_EMIT		.LONG	C_EMIT
+
+F_WORD		.LONG	F_EMIT
+		.BYTE	4	; flags + namelen
+		.BYTE	"WORD"
+		.ALIGN	4
+B_WORD		.LONG	C_WORD
+
+F_NUMBER	.LONG	F_WORD
+		.BYTE	6	; flags + namelen
+		.BYTE	"NUMBER"
+		.ALIGN	4
+		.LONG	C_NUMBER
+
+F_FIND		.LONG	F_NUMBER
+		.BYTE	4	; flags + namelen
+		.BYTE	"FIND"
+		.ALIGN	4
+B_FIND		.LONG	C_FIND
+
+F_TCFA		.LONG	F_FIND
+		.BYTE	4	; flags + namelen
+		.BYTE	">CFA"
+		.ALIGN	4
+B_TCFA		.LONG	C_TCFA
+
+F_TDFA		.LONG	F_TCFA
+		.BYTE	4	; flags + namelen
+		.BYTE	">DFA"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_TCFA
+		.LONG	B_INCR4
+		.LONG	B_EXIT
+
+F_CREATE	.LONG	F_TDFA
+		.BYTE	6	; flags + namelen
+		.BYTE	"CREATE"
+		.ALIGN	4
+B_CREATE	.LONG	C_CREATE
+
+F_COMMA 	.LONG	F_CREATE
+		.BYTE	1	; flags + namelen
+		.BYTE	","
+		.ALIGN	4
+B_COMMA 	.LONG	C_COMMA
+
+F_LBRAC 	.LONG	F_COMMA
+		.BYTE	1 | F_IMMED
+		.BYTE	"["
+		.ALIGN	4
+B_LBRAC 	.LONG	C_LBRAC
+
+F_RBRAC 	.LONG	F_LBRAC
+		.BYTE	1
+		.BYTE	"]"
+		.ALIGN	4
+B_RBRAC 	.LONG	C_RBRAC
+
+F_COLON 	.LONG	F_RBRAC
+		.BYTE	1	; flags + namelen
+		.BYTE	":"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_WORD
+		.LONG	B_CREATE
+		.LONG	B_LIT, DOCOL, B_COMMA
+		.LONG	B_LATEST, B_FETCH, B_HIDDEN
+		.LONG	B_RBRAC
+		.LONG	B_EXIT
+
+F_SEMICOLON	.LONG	F_COLON
+		.BYTE	1 | F_IMMED
+		.BYTE	";"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, B_EXIT, B_COMMA
+		.LONG	B_LATEST, B_FETCH, B_HIDDEN
+		.LONG	B_LBRAC
+		.LONG	B_EXIT
+
+F_IMMEDIATE	.LONG	F_SEMICOLON
+		.BYTE	9 | F_IMMED
+		.BYTE	"IMMEDIATE"
+		.ALIGN	4
+		.LONG	C_IMMEDIATE
+
+F_HIDDEN_	.LONG	F_IMMEDIATE
+		.BYTE	6
+		.BYTE	"HIDDEN"
+		.ALIGN	4
+B_HIDDEN	.LONG	C_HIDDEN
+
+F_HIDE		.LONG	F_HIDDEN_
+		.BYTE	4
+		.BYTE	"HIDE"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_WORD
+		.LONG	B_FIND
+		.LONG	B_HIDDEN
+		.LONG	B_EXIT
+
+F_TICK		.LONG	F_HIDE
+		.BYTE	1
+		.BYTE	"'"
+		.ALIGN	4
+		.LONG	C_TICK
+
+F_BRANCH	.LONG	F_TICK
+		.BYTE	6
+		.BYTE	"BRANCH"
+		.ALIGN	4
+B_BRANCH	.LONG	C_BRANCH
+
+F_ZBRANCH	.LONG	F_BRANCH
+		.BYTE	7
+		.BYTE	"0BRANCH"
+		.ALIGN	4
+B_ZBRANCH	.LONG	C_ZBRANCH
+
+F_LITSTRING	.LONG	F_ZBRANCH
+		.BYTE	9
+		.BYTE	"LITSTRING"
+		.ALIGN	4
+		.LONG	C_LITSTRING
+
+F_TELL		.LONG	F_LITSTRING
+		.BYTE	4
+		.BYTE	"TELL"
+		.ALIGN	4
+		.LONG	C_TELL
+
+F_CHAR		.LONG	F_TELL
+		.BYTE	4
+		.BYTE	"CHAR"
+		.ALIGN	4
+		.LONG	C_CHAR
+
+F_EXECUTE	.LONG	F_CHAR
+		.BYTE	7
+		.BYTE	"EXECUTE"
+		.ALIGN	4
+		.LONG	C_EXECUTE
+
+F_QUIT		.LONG	F_EXECUTE
+		.BYTE	4	; flags + namelen
+		.BYTE	"QUIT"
+		.ALIGN	4
+B_QUIT		.LONG	DOCOL
+		.LONG	B_R0, B_RSPSTORE
+		.LONG	B_INTERPRET
+		.LONG	B_BRANCH, -8
+
+F_NL		.LONG	F_QUIT
+		.BYTE	4
+		.BYTE	"'\n'"
+		.ALIGN	4
+B_NL		.LONG	DOCOL
+		.LONG	B_LIT, 10
+		.LONG	B_EXIT
+
+F_CR		.LONG	F_NL
+		.BYTE	2
+		.BYTE	"CR"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_NL, B_EMIT
+		.LONG	B_EXIT
+
+F_BL		.LONG	F_CR
+		.BYTE	2
+		.BYTE	"BL"
+		.ALIGN	4
+B_BL		.LONG	DOCOL
+		.LONG	B_LIT, 32
+		.LONG	B_EXIT
+
+F_SPACE 	.LONG	F_BL
+		.BYTE	5
+		.BYTE	"SPACE"
+		.ALIGN	4
+B_SPACE 	.LONG	DOCOL
+		.LONG	B_BL, B_EMIT
+		.LONG	B_EXIT
+
+F_SPACES	.LONG	F_SPACE
+		.BYTE	6
+		.BYTE	"SPACES"
+		.ALIGN	4
+B_SPACES	.LONG	DOCOL
+		.LONG	B_DUP, B_ZGT
+		.LONG	B_ZBRANCH, 20
+		.LONG	B_SPACE, B_DECR
+		.LONG	B_BRANCH, -28
+		.LONG	B_DROP
+		.LONG	B_EXIT
+
+F_TRUE		.LONG	F_SPACES
+		.BYTE	4
+		.BYTE	"TRUE"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, 1
+		.LONG	B_EXIT
+
+F_FALSE 	.LONG	F_TRUE
+		.BYTE	5
+		.BYTE	"FALSE"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, 0
+		.LONG	B_EXIT
+
+F_NOT		.LONG	F_FALSE
+		.BYTE	3
+		.BYTE	"NOT"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_ZEQU
+		.LONG	B_EXIT
+
+F_NEGATE	.LONG	F_NOT
+		.BYTE	6
+		.BYTE	"NEGATE"
+		.ALIGN	4
+B_NEGATE	.LONG	DOCOL
+		.LONG	B_LIT, 0, B_SWAP, B_SUB
+		.LONG	B_EXIT
+
+F_DIVMOD	.LONG	F_NEGATE
+		.BYTE	4
+		.BYTE	"/MOD"
+		.ALIGN	4
+B_DIVMOD	.LONG	C_DIVMOD
+
+F_DIV		.LONG	F_DIVMOD
+		.BYTE	1
+		.BYTE	"/"
+		.ALIGN	4
+B_DIV		.LONG	DOCOL
+		.LONG	B_DIVMOD, B_SWAP, B_DROP
+		.LONG	B_EXIT
+
+F_MOD		.LONG	F_DIV
+		.BYTE	3
+		.BYTE	"MOD"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_DIVMOD, B_DROP
+		.LONG	B_EXIT
+
+F_LITERAL	.LONG	F_MOD
+		.BYTE	7 | F_IMMED
+		.BYTE	"LITERAL"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, B_LIT, B_COMMA
+		.LONG	B_EXIT
+
+F_COMPILE	.LONG	F_LITERAL
+		.BYTE	9 | F_IMMED
+		.BYTE	"[COMPILE]"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_WORD		; get next word
+		.LONG	B_FIND		; find in dictionary
+		.LONG	B_TCFA		; get codeword
+		.LONG	B_COMMA 	; compile that
+		.LONG	B_EXIT
+
+F_RECURSE	.LONG	F_COMPILE
+		.BYTE	7 | F_IMMED
+		.BYTE	"RECURSE"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LATEST, B_FETCH
+		.LONG	B_TCFA, B_COMMA
+		.LONG	B_EXIT
+
+F_IF		.LONG	F_RECURSE
+		.BYTE	2 | F_IMMED
+		.BYTE	"IF"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, B_ZBRANCH, B_COMMA	; compile 0BRANCH
+		.LONG	B_HERE, B_FETCH 		; save current location on stack
+		.LONG	B_LIT, 0, B_COMMA		; compile dummy offset
+		.LONG	B_EXIT
+
+F_THEN		.LONG	F_IF
+		.BYTE	4 | F_IMMED
+		.BYTE	"THEN"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_DUP
+		.LONG	B_HERE, B_FETCH, B_SWAP, B_SUB	; calculate offset
+		.LONG	B_SWAP, B_STORE 		; store offset
+		.LONG	B_EXIT
+
+F_ELSE		.LONG	F_THEN
+		.BYTE	4 | F_IMMED
+		.BYTE	"ELSE"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, B_BRANCH, B_COMMA	; compile BRANCH to skip false part
+		.LONG	B_HERE, B_FETCH 		; save current location on stack
+		.LONG	B_LIT, 0, B_COMMA		; compile dummy offset
+		.LONG	B_SWAP, B_DUP
+		.LONG	B_HERE, B_FETCH, B_SWAP, B_SUB	; calculate offset
+		.LONG	B_SWAP, B_STORE 		; store offset
+		.LONG	B_EXIT
+
+F_BEGIN 	.LONG	F_ELSE
+		.BYTE	5 | F_IMMED
+		.BYTE	"BEGIN"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_HERE, B_FETCH
+		.LONG	B_EXIT
+
+F_UNTIL 	.LONG	F_BEGIN
+		.BYTE	5 | F_IMMED
+		.BYTE	"UNTIL"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, B_ZBRANCH, B_COMMA
+		.LONG	B_HERE, B_FETCH, B_SUB, B_COMMA
+		.LONG	B_EXIT
+
+F_AGAIN 	.LONG	F_UNTIL
+		.BYTE	5 | F_IMMED
+		.BYTE	"AGAIN"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, B_BRANCH, B_COMMA
+		.LONG	B_HERE, B_FETCH, B_SUB, B_COMMA
+		.LONG	B_EXIT
+
+F_WHILE 	.LONG	F_AGAIN
+		.BYTE	5 | F_IMMED
+		.BYTE	"WHILE"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, B_ZBRANCH, B_COMMA
+		.LONG	B_HERE, B_FETCH
+		.LONG	B_LIT, 0, B_COMMA
+		.LONG	B_EXIT
+
+F_REPEAT	.LONG	F_WHILE
+		.BYTE	6 | F_IMMED
+		.BYTE	"REPEAT"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, B_BRANCH, B_COMMA
+		.LONG	B_SWAP
+		.LONG	B_HERE, B_FETCH, B_SUB, B_COMMA
+		.LONG	B_DUP
+		.LONG	B_HERE, B_FETCH, B_SWAP, B_SUB
+		.LONG	B_SWAP, B_STORE
+		.LONG	B_EXIT
+
+F_UPOINT	.LONG	F_REPEAT
+		.BYTE	2
+		.BYTE	"U."
+		.ALIGN	4
+B_UPOINT	.LONG	DOCOL
+		.LONG	B_BASE, B_FETCH, B_DIVMOD
+		.LONG	B_QDUP, B_ZBRANCH, 8
+		.LONG	B_UPOINT
+		.LONG	B_DUP, B_LIT, 10, B_LT
+		.LONG	B_ZBRANCH, 20
+		.LONG	B_LIT, $30	; '0'
+		.LONG	B_BRANCH, 24
+		.LONG	B_LIT, 10, B_SUB, B_LIT, $41 ; 'A'
+		.LONG	B_ADD, B_EMIT
+		.LONG	B_EXIT
+
+F_POINTS	.LONG	F_UPOINT
+		.BYTE	2
+		.BYTE	".S"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_DSPFETCH
+		.LONG	B_DUP, B_S0, B_LT
+		.LONG	B_ZBRANCH, 36
+		.LONG	B_DUP, B_FETCH, B_UPOINT, B_SPACE
+		.LONG	B_INCR4, B_INCR4	; stack is 8 byte aligned
+		.LONG	B_BRANCH, -48
+		.LONG	B_DROP
+		.LONG	B_EXIT
+
+F_UWIDTH	.LONG	F_POINTS
+		.BYTE	6
+		.BYTE	"UWIDTH"
+		.ALIGN	4
+B_UWIDTH	.LONG	DOCOL
+		.LONG	B_BASE, B_FETCH, B_DIV
+		.LONG	B_QDUP, B_ZBRANCH, 20
+		.LONG	B_UWIDTH, B_INCR
+		.LONG	B_BRANCH, 12
+		.LONG	B_LIT, 1
+		.LONG	B_EXIT
+
+F_UPOINTR	.LONG	F_UWIDTH
+		.BYTE	3
+		.BYTE	"U.R"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_SWAP, B_DUP, B_UWIDTH, B_ROT, B_SWAP, B_SUB
+		.LONG	B_SPACES
+		.LONG	B_UPOINT
+		.LONG	B_EXIT
+
+F_POINTR	.LONG	F_UPOINTR
+		.BYTE	2
+		.BYTE	".R"
+		.ALIGN	4
+B_POINTR	.LONG	DOCOL
+		.LONG	B_SWAP, B_DUP, B_ZLT
+		.LONG	B_ZBRANCH, 36
+		.LONG	B_NEGATE, B_LIT, 1, B_SWAP, B_ROT, B_DECR
+		.LONG	B_BRANCH, 20
+		.LONG	B_LIT, 0, B_SWAP, B_ROT
+		.LONG	B_SWAP, B_DUP, B_UWIDTH, B_ROT, B_SWAP, B_SUB
+		.LONG	B_SPACES, B_SWAP
+		.LONG	B_ZBRANCH, 16
+		.LONG	B_LIT, '-', B_EMIT
+		.LONG	B_UPOINT
+		.LONG	B_EXIT
+
+F_POINT 	.LONG	F_POINTR
+		.BYTE	1
+		.BYTE	"."
+		.ALIGN	4
+B_POINT 	.LONG	DOCOL
+		.LONG	B_LIT, 0, B_POINTR, B_SPACE, B_EXIT
+
+F_QUESTION	.LONG	F_POINT
+		.BYTE	1
+		.BYTE	"?"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_FETCH, B_POINT, B_EXIT
+
+F_HEX		.LONG	F_QUESTION
+		.BYTE	3
+		.BYTE	"HEX"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, 16, B_BASE, B_STORE, B_EXIT
+
+F_DECIMAL	.LONG	F_HEX
+		.BYTE	7
+		.BYTE	"DECIMAL"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, 10, B_BASE, B_STORE, B_EXIT
+
+F_CONSTANT	.LONG	F_DECIMAL
+		.BYTE	8
+		.BYTE	"CONSTANT"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_WORD, B_CREATE
+		.LONG	B_LIT, DOCOL, B_COMMA
+		.LONG	B_LIT, B_LIT, B_COMMA
+		.LONG	B_COMMA
+		.LONG	B_LIT, B_EXIT, B_COMMA
+		.LONG	B_EXIT
+
+F_ALLOT 	.LONG	F_CONSTANT
+		.BYTE	5
+		.BYTE	"ALLOT"
+		.ALIGN	4
+B_ALLOT 	.LONG	DOCOL
+		.LONG	B_HERE, B_FETCH, B_SWAP, B_HERE, B_ADDSTORE, B_EXIT
+
+F_CELLS 	.LONG	F_ALLOT
+		.BYTE	5
+		.BYTE	"CELLS"
+		.ALIGN	4
+B_CELLS 	.LONG	DOCOL
+		.LONG	B_LIT, 4, B_MUL, B_EXIT
+
+F_VARIABLE	.LONG	F_CELLS
+		.BYTE	8
+		.BYTE	"VARIABLE"
+		.ALIGN	4
+		.LONG	DOCOL
+		.LONG	B_LIT, 1, B_CELLS, B_ALLOT
+		.LONG	B_WORD, B_CREATE
+		.LONG	B_LIT, DOCOL, B_COMMA
+		.LONG	B_LIT, B_LIT, B_COMMA
+		.LONG	B_COMMA
+		.LONG	B_LIT, B_EXIT, B_COMMA
+		.LONG	B_EXIT
+
+F_BYE		.LONG	F_VARIABLE
+		.BYTE	3
+		.BYTE	"BYE"
+		.ALIGN	4
+		.LONG	C_BYE
+
+# last word builtin
+F_INTERPRET	.LONG	F_BYE
+		.BYTE	9
+		.BYTE	"INTERPRET"
+		.ALIGN	4
+B_INTERPRET	.LONG	C_INTERPRET
+
+# QUIT word to JUMP
+W_QUIT		.LONG	B_QUIT
