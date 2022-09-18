@@ -18,10 +18,13 @@ LF		.EQU	$0a
 CR		.EQU	$0d
 ESC		.EQU	$1b
 MLINBYTES	.EQU	8
+SECTOR_BYTES	.EQU	512
 
 # IRQs
 IRQ_RTC 	.EQU	$01
+IRQ_TIMER	.EQU	$02
 IRQ_CON 	.EQU	$04
+IRQ_DISK	.EQU	$08
 
 # special registers
 REG_MOD 	.EQU	$00
@@ -40,10 +43,27 @@ CON_DATA	.EQU	CON_CTRL + 1
 RTC_CTRL	.EQU	$02
 RTC_DATA	.EQU	RTC_CTRL + 1
 RTC_WRITE	.EQU	RTC_CTRL + 2
+TIMER_CTRL	.EQU	$08
+DISK_CTRL	.EQU	$10
+DISK_CMD	.EQU	DISK_CTRL + 1
+DISK_ADDRHI	.EQU	DISK_CTRL + 2
+DISK_ADDRLO	.EQU	DISK_CTRL + 3
 DEBUG_IO	.EQU	$FF
 
 #
-# memory map
+# disk commands
+#
+DISK_CMD_INFO	.EQU	0
+DISK_CMD_READ	.EQU	1
+DISK_CMD_WRITE	.EQU	2
+
+#
+# memory map: assumes at least 32KB of memory
+#	 8KB rom
+#	 4KB system data & stacks
+#	 4KB forth rstack
+#	12KB forth code area
+#	 4KB disk I/O area
 #
 ROM_START	.EQU	$00000
 RAM_START	.EQU	$02000
@@ -51,14 +71,16 @@ IRQ_STACK	.EQU	$03000
 EXC_STACK	.EQU	IRQ_STACK - 32
 SYS_STACK	.EQU	EXC_STACK - 128
 RSTACK		.EQU	$04000
-TOP_RAM 	.EQU	$20000
+IOAREA		.EQU	$07000
 
 #
 # RAM area
 #
 		.ORG	RAM_START
 SYSVARS_START
+TICK_M10	.SPACE	4
 MMON_VALUE	.SPACE	4
+DISK_SECTORS	.SPACE	4
 
 # jforth vars
 FORTH_STATE	.SPACE	4
@@ -75,6 +97,9 @@ KEYBUF		.SPACE	KEYBUF_SIZE + 2
 # rtc date buffer
 DATE_IO 	.SPACE	8
 DATE_READY	.SPACE	1
+
+# disk ready
+DISK_READY	.SPACE	1
 
 # align end marker
 		.SPACE	 8 - ($$ % 8)
@@ -124,7 +149,7 @@ IRQ_HANDLER	SET	REG_IRQ_SCRATCH, R0
 		ST1	[R2 + 2], R4	# store char
 
 .NOCON		AND	R2, R1, IRQ_RTC
-		BZ	R2, .DONE
+		BZ	R2, .NORTC
 		LEA	R2, DATE_IO
 		LEA	R3, RTC_DATA
 		LEA	R4, 8
@@ -135,6 +160,18 @@ IRQ_HANDLER	SET	REG_IRQ_SCRATCH, R0
 		BNZ	R4, .RTCDUMP
 		LI	R4, 1
 		ST1	[R2], R4
+
+.NORTC		AND	R2, R1, IRQ_DISK
+		BZ	R2, .NODISK
+		LI	R2, 1
+		ST1	[R2 + DISK_READY - 1], R2
+
+.NODISK 	AND	R2, R1, IRQ_TIMER
+		BZ	R2, .DONE
+		LI	R2, TICK_M10
+		LD4	R3, [R2]
+		ADD	R3, 1
+		ST4	[R2], R3
 
 .DONE		LD4	R1, [R0 - 1]
 		LD4	R2, [R0 - 2]
@@ -395,6 +432,11 @@ MONITOR 	# zero sysvars area
 		ADD	R0, 4
 		BLT	R0, R1, .ZEROVARS
 
+		# setup timer
+		LI	R0, 10	# tens of miliseconds
+		LI	R1, TIMER_CTRL
+		OUT	R0, R1
+
 		# init serial console
 		;LD	 A, :RTS_LOW
 		;OUT	 (:IODEV_CONSOLE), A
@@ -427,6 +469,8 @@ MAINMENU	LI	R0, MENU
 		BZ	R1, JFORTH
 		SUB	R1, R0, '4'
 		BZ	R1, BENCH
+		SUB	R1, R0, '5'
+		BZ	R1, DISKINFO
 		SUB	R1, R0, ESC
 		BNZ	R1, MAINMENU
 
@@ -442,12 +486,21 @@ MAINMENU	LI	R0, MENU
 #
 BENCH		LI	R0, BENCH_HEADER
 		JAL	CONSTR
+		LI	R9, 0
+		LD4	R9, [R9 + TICK_M10 / 4]
 		LI	R8, 100
 .LOOP		LI	R0, 0
 		LI	R1, 64
 		JAL	CRC32
 		SUB	R8, 1
 		BNZ	R8, .LOOP
+		JAL	HEXFULL
+		LI	R8, 0
+		LD4	R8, [R8 + TICK_M10 / 4]
+		SUB	R8, R9
+		LI	R0, BENCH_FOOTER
+		JAL	CONSTR
+		MV	R0, R8
 		JAL	HEXFULL
 		BRA	MAINMENU
 
@@ -457,8 +510,6 @@ BENCH		LI	R0, BENCH_HEADER
 DATE		# request date
 		LI	R0, 0
 		ST1	[R0 + DATE_READY], R0
-
-		# request date
 .POLL		LI	R0, RTC_CTRL
 		IN	R0, R0
 		BZ	R0, .POLL
@@ -757,3 +808,91 @@ MEMMON		LI	R13, 0	# base addr
 .EXEC		LI	R1, MMON_VALUE
 		LD4	R1, [R1]
 		JMP	R1
+
+#
+# get disk info
+#
+DISKINFO	# output header
+		LI	R0, DISK_HEADER
+		JAL	CONSTR
+
+		# wait ready
+		LI	R0, 0
+		ST1	[R0 + DISK_READY], R0
+.POLL		LI	R0, DISK_CTRL
+		IN	R0, R0
+		BZ	R0, .POLL
+
+		# send request
+		LI	R1, DISK_CMD
+		LI	R0, DISK_CMD_INFO
+		OUT	R0, R1
+		LI	R1, DISK_ADDRHI
+		LI	R0, IOAREA / 256
+		OUT	R0, R1
+		LI	R1, DISK_ADDRLO
+		LI	R0, IOAREA & $ff
+		OUT	R0, R1
+
+		# wait response
+		LI	R8, 0
+		LD4	R8, [R8 + TICK_M10 / 4]
+		ADD	R8, 100 # tenths of second = 10 seconds
+.AGAIN		LI	R0, 0
+		LD1	R0, [R0 + DISK_READY]
+		BNZ	R0, .READY
+		WAIT
+		LI	R0, 0
+		LD4	R0, [R0 + TICK_M10 / 4]
+		BLT	R0, R8, .AGAIN
+
+		# timeout
+		LI	R0, DISK_TIMEOUT
+		JAL	CONSTR
+		BRA	MAINMENU
+
+		# DMA need cache invalidation
+.READY		LI	R1, IOAREA
+		INV	R1, 32
+
+		# show info
+		LI	R1, 0
+		LD4	R0, [R1 + IOAREA / 4]
+		ST4	[R1 + DISK_SECTORS / 4], R0
+		JAL	HEXFULL
+		LI	R0, DISK_FOOTER
+		JAL	CONSTR
+
+		# done
+		BRA	MAINMENU
+
+#
+# disk io, R0 = block, R1 = CMD
+#
+DISK_IO 	LI	R2, 0
+		ST1	[R2 + DISK_READY], R2
+.POLL		LI	R2, DISK_CTRL
+		IN	R2, R2
+		BZ	R2, .POLL
+
+		# build request
+		LI	R2, IOAREA
+		ADD	R3, R2, SECTOR_BYTES
+		ST4	[R2 + 0], R0	# block no
+		ST4	[R2 + 1], R3	# buffer
+		INV	R2, 32
+
+		# send request
+		LI	R0, DISK_CMD
+		OUT	R1, R0
+
+		# wait response
+.AGAIN		LI	R0, 0
+		LD1	R0, [R0 + DISK_READY]
+		BNZ	R0, .READY
+		WAIT
+		BRA	.AGAIN
+
+		# done
+.READY		MV	R0, R3
+		RET

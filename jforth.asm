@@ -696,11 +696,22 @@ NEXT		LD4	R0, [R12]	; R12 = ESI
 		LD4	R1, [R0]	; GET CODEWORD
 		JMP	R1		; JUMP CODEWORD
 
-# illegal exception
-C_ILLEGAL	ILLEGAL
-
 # drop top of stack
 C_DROP		ENTER	1		; drop top of stack
+		BRA	NEXT
+
+# read disk block, put addr to top
+C_BLOCK 	LD4	R0, [SP]
+		LI	R1, DISK_CMD_READ
+		JAL	DISK_IO
+		ST4	[SP], R0
+		BRA	NEXT
+
+# write disk block, put addr to top
+C_WRITE 	LD4	R0, [SP]
+		LI	R1, DISK_CMD_WRITE
+		JAL	DISK_IO
+		ST4	[SP], R0
 		BRA	NEXT
 
 # swap top two elements on stack
